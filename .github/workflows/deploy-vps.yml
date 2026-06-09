@@ -17,53 +17,171 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validate required configuration
         run: |
-          test -n "${{ secrets.VPS_HOST }}" || (echo "Missing secret VPS_HOST" && exit 1)
-          test -n "${{ secrets.VPS_USER }}" || (echo "Missing secret VPS_USER" && exit 1)
-          test -n "${{ secrets.VPS_SSH_KEY }}" || (echo "Missing secret VPS_SSH_KEY" && exit 1)
-          test -n "${APP_DOMAIN}" || (echo "Missing repository variable APP_DOMAIN" && exit 1)
+          set -euo pipefail
+
+          test -n "${VPS_HOST}" || (echo "::error::Missing secret VPS_HOST" && exit 1)
+          test -n "${VPS_USER}" || (echo "::error::Missing secret VPS_USER" && exit 1)
+          test -n "${VPS_PASSWORD}${VPS_SSH_KEY}" || (echo "::error::Missing SSH credential. Set either secret VPS_PASSWORD or secret VPS_SSH_KEY." && exit 1)
+          test -n "${APP_DOMAIN}" || (echo "::error::Missing repository variable APP_DOMAIN" && exit 1)
+
+          if [ -n "${VPS_PASSWORD}" ] && [ -n "${VPS_SSH_KEY}" ]; then
+            echo "::warning::Both VPS_PASSWORD and VPS_SSH_KEY are set. The workflow will use VPS_PASSWORD."
+          fi
+
+          case "${VPS_SSH_PORT}" in
+            ''|*[!0-9]*)
+              echo "::error::Repository variable VPS_SSH_PORT must be a number."
+              exit 1
+              ;;
+          esac
+          if [ "${VPS_SSH_PORT}" -lt 1 ] || [ "${VPS_SSH_PORT}" -gt 65535 ]; then
+            echo "::error::Repository variable VPS_SSH_PORT must be between 1 and 65535."
+            exit 1
+          fi
+
+          case "${VPS_HOST}" in
+            *[[:space:]]*)
+              echo "::error::Secret VPS_HOST must not contain spaces or line breaks."
+              exit 1
+              ;;
+            http://*|https://*|*@*|*/*)
+              echo "::error::Secret VPS_HOST must be only the VPS IP or DNS hostname, without protocol, user, path, or port."
+              exit 1
+              ;;
+            *:*)
+              echo "::error::Do not include a port in VPS_HOST. Set repository variable VPS_SSH_PORT instead."
+              exit 1
+              ;;
+          esac
+
+          if ! getent ahosts "${VPS_HOST}" >/dev/null 2>&1; then
+            echo "::error::Secret VPS_HOST does not resolve from GitHub Actions. Use the public VPS IP or a valid DNS hostname."
+            exit 1
+          fi
 
       - name: Install local deploy tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y rsync curl openssh-client
+          packages="rsync curl openssh-client"
+          if [ -n "${VPS_PASSWORD}" ]; then
+            packages="${packages} sshpass"
+          fi
+          sudo apt-get install -y ${packages}
 
       - name: Configure SSH
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_key
-          chmod 600 ~/.ssh/vps_key
-          ssh-keyscan -p "${VPS_SSH_PORT}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+          cat > ~/.ssh/vps_ssh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          if [ -n "${VPS_PASSWORD:-}" ]; then
+            export SSHPASS="${VPS_PASSWORD}"
+            exec sshpass -e ssh \
+              -o StrictHostKeyChecking=yes \
+              -o PreferredAuthentications=password,keyboard-interactive \
+              -o PubkeyAuthentication=no \
+              -p "${VPS_SSH_PORT}" \
+              "$@"
+          fi
+
+          exec ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/vps_key \
+            -p "${VPS_SSH_PORT}" \
+            "$@"
+          SCRIPT
+          chmod 700 ~/.ssh/vps_ssh
+
+          if [ -z "${VPS_PASSWORD}" ]; then
+            printf '%b\n' "${VPS_SSH_KEY}" | sed 's/\r$//' > ~/.ssh/vps_key
+            chmod 600 ~/.ssh/vps_key
+
+            if grep -Eq '^(ssh-ed25519|ssh-rsa|ssh-dss|ecdsa-sha2-|sk-ssh-ed25519|sk-ecdsa-sha2-)' ~/.ssh/vps_key; then
+              echo "::error::Secret VPS_SSH_KEY contains a public key. It must contain the private key."
+              exit 1
+            fi
+            if ! grep -Eq '^-----BEGIN .*PRIVATE KEY-----$' ~/.ssh/vps_key || ! grep -Eq '^-----END .*PRIVATE KEY-----$' ~/.ssh/vps_key; then
+              echo "::error::Secret VPS_SSH_KEY must be the complete private key, including BEGIN/END PRIVATE KEY lines."
+              exit 1
+            fi
+            if ! ssh-keygen -y -f ~/.ssh/vps_key >/dev/null 2>ssh_key_error.log </dev/null; then
+              if grep -qi 'passphrase' ssh_key_error.log; then
+                echo "::error::Secret VPS_SSH_KEY appears to be passphrase-protected. Use an unencrypted deploy key for this workflow."
+              else
+                echo "::error::Secret VPS_SSH_KEY is not a usable private key. Recreate the GitHub secret from the original private key file."
+              fi
+              exit 1
+            fi
+          else
+            rm -f ~/.ssh/vps_key
+          fi
+
+          known_hosts="$(mktemp)"
+          if ! ssh-keyscan -T 15 -H -p "${VPS_SSH_PORT}" "${VPS_HOST}" > "${known_hosts}"; then
+            echo "::error::Could not scan SSH host key. Check VPS_HOST, VPS_SSH_PORT, the VPS firewall, and whether sshd is running."
+            exit 1
+          fi
+          if [ ! -s "${known_hosts}" ]; then
+            echo "::error::SSH host key scan returned no keys. Check VPS_HOST and VPS_SSH_PORT."
+            exit 1
+          fi
+          cat "${known_hosts}" >> ~/.ssh/known_hosts
 
       - name: Prepare VPS
         run: |
-          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "VPS_APP_DIR='${VPS_APP_DIR}' bash -s" <<'REMOTE'
+          ~/.ssh/vps_ssh "${VPS_USER}@${VPS_HOST}" "VPS_APP_DIR='${VPS_APP_DIR}' bash -s" <<'REMOTE'
             set -euo pipefail
+
+            sudo_cmd=""
+            if [ "$(id -u)" -ne 0 ]; then
+              if ! command -v sudo >/dev/null 2>&1; then
+                echo "::error::VPS_USER must be root or have sudo installed with passwordless sudo."
+                exit 1
+              fi
+              if ! sudo -n true >/dev/null 2>&1; then
+                echo "::error::VPS_USER must be root or have passwordless sudo for package and Docker installation."
+                exit 1
+              fi
+              sudo_cmd="sudo"
+            fi
+
             if ! command -v curl >/dev/null 2>&1 || ! command -v rsync >/dev/null 2>&1; then
-              sudo apt-get update
-              sudo apt-get install -y curl rsync ca-certificates gnupg
+              ${sudo_cmd} apt-get update
+              ${sudo_cmd} apt-get install -y curl rsync ca-certificates gnupg
             fi
             if ! command -v docker >/dev/null 2>&1; then
-              sudo install -m 0755 -d /etc/apt/keyrings
+              ${sudo_cmd} install -m 0755 -d /etc/apt/keyrings
               . /etc/os-release
               repo_os="${ID}"
               if [ "${repo_os}" != "debian" ] && [ "${repo_os}" != "ubuntu" ]; then
                 repo_os="debian"
               fi
-              curl -fsSL "https://download.docker.com/linux/${repo_os}/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-              sudo chmod a+r /etc/apt/keyrings/docker.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${repo_os} ${VERSION_CODENAME:-bookworm} stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+              curl -fsSL "https://download.docker.com/linux/${repo_os}/gpg" | ${sudo_cmd} gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              ${sudo_cmd} chmod a+r /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${repo_os} ${VERSION_CODENAME:-bookworm} stable" | ${sudo_cmd} tee /etc/apt/sources.list.d/docker.list >/dev/null
+              ${sudo_cmd} apt-get update
+              ${sudo_cmd} apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
             fi
-            sudo mkdir -p "${VPS_APP_DIR}"
-            sudo chown -R "$USER":"$USER" "${VPS_APP_DIR}"
+            ${sudo_cmd} mkdir -p "${VPS_APP_DIR}"
+            ${sudo_cmd} chown -R "$USER":"$USER" "${VPS_APP_DIR}"
           REMOTE
 
       - name: Sync files
@@ -73,12 +191,12 @@ jobs:
             --exclude 'node_modules' \
             --exclude 'dist' \
             --exclude '.env.production' \
-            -e "ssh -i ~/.ssh/vps_key -p ${VPS_SSH_PORT}" \
-            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${VPS_APP_DIR}/"
+            -e "$HOME/.ssh/vps_ssh" \
+            ./ "${VPS_USER}@${VPS_HOST}:${VPS_APP_DIR}/"
 
       - name: Write production env
         run: |
-          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cat > '${VPS_APP_DIR}/.env.production'" <<EOF
+          ~/.ssh/vps_ssh "${VPS_USER}@${VPS_HOST}" "cat > '${VPS_APP_DIR}/.env.production'" <<EOF
           NODE_ENV=production
           HOST=0.0.0.0
           PORT=8787
@@ -92,7 +210,7 @@ jobs:
 
       - name: Deploy compose stack
         run: |
-          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cd '${VPS_APP_DIR}' && \
+          ~/.ssh/vps_ssh "${VPS_USER}@${VPS_HOST}" "cd '${VPS_APP_DIR}' && \
             docker compose --env-file .env.production down --remove-orphans && \
             docker compose --env-file .env.production up -d --build --remove-orphans && \
             docker compose --env-file .env.production ps && \
@@ -100,7 +218,7 @@ jobs:
 
       - name: Healthcheck local
         run: |
-          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "curl -fsS 'http://127.0.0.1:${APP_PORT}/health'"
+          ~/.ssh/vps_ssh "${VPS_USER}@${VPS_HOST}" "curl -fsS 'http://127.0.0.1:${APP_PORT}/health'"
 
       - name: Healthcheck HTTPS
         run: |

@@ -7,21 +7,29 @@
 - Porta interna `APP_PORT` liberada apenas se você quiser testar diretamente.
 - Domínio apontando para o IP da VPS.
 - Repositório no GitHub com GitHub Actions habilitado.
+- Usuário SSH `root` ou com `sudo` sem senha para instalar pacotes e Docker.
 
 ## Variáveis e secrets no GitHub
 
 Secrets obrigatórios:
 
-- `VPS_HOST`: IP ou hostname da VPS.
+- `VPS_HOST`: IP público IPv4 ou hostname da VPS, sem `https://`, usuário, caminho ou porta.
 - `VPS_USER`: usuário SSH.
-- `VPS_SSH_KEY`: chave privada SSH.
 
-Variables recomendadas:
+Credencial SSH, escolha uma:
+
+- `VPS_PASSWORD`: senha do usuário SSH.
+- `VPS_SSH_KEY`: chave privada SSH completa, sem passphrase, incluindo as linhas `-----BEGIN ... PRIVATE KEY-----` e `-----END ... PRIVATE KEY-----`. Não use o arquivo `.pub`.
+
+Variáveis obrigatórias:
 
 - `APP_DOMAIN`: domínio público, por exemplo `memory.example.com`.
+
+Variáveis opcionais:
+
 - `APP_PORT`: porta local da API na VPS, padrão `8787`.
 - `VPS_APP_DIR`: pasta na VPS, padrão `/opt/persistent-gpt-memory-mcp`.
-- `VPS_SSH_PORT`: porta SSH, padrão `22`.
+- `VPS_SSH_PORT`: porta SSH, padrão `22`. Use esta variável para porta customizada, não coloque a porta em `VPS_HOST`.
 - `COMPOSE_PROJECT_NAME`: padrão `persistent-gpt-memory-mcp`.
 - `DATA_DIR`: padrão `/app/data`.
 
@@ -80,4 +88,3 @@ Esta versão não tem login, JWT, OAuth ou cadastro. Use pelo menos uma destas p
 - Domínio não divulgado.
 - Secure MCP Tunnel, Cloudflare Tunnel ou proxy com controle de acesso.
 - Backup recorrente da pasta `data`.
-
