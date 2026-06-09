@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+coverage/
+*.log
+data/docs/**/*.md
+data/versions/**/*.md
+data/trash/**/*.md
+data/audit/*.jsonl
+!data/docs/.gitkeep
+!data/versions/.gitkeep
+!data/trash/.gitkeep
+!data/audit/.gitkeep
+!data/templates/.gitkeep

@@ -1,0 +1,107 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  VPS_APP_DIR: ${{ vars.VPS_APP_DIR || '/opt/persistent-gpt-memory-mcp' }}
+  VPS_SSH_PORT: ${{ vars.VPS_SSH_PORT || '22' }}
+  APP_PORT: ${{ vars.APP_PORT || '8787' }}
+  APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME || 'persistent-gpt-memory-mcp' }}
+  DATA_DIR: ${{ vars.DATA_DIR || '/app/data' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        run: |
+          test -n "${{ secrets.VPS_HOST }}" || (echo "Missing secret VPS_HOST" && exit 1)
+          test -n "${{ secrets.VPS_USER }}" || (echo "Missing secret VPS_USER" && exit 1)
+          test -n "${{ secrets.VPS_SSH_KEY }}" || (echo "Missing secret VPS_SSH_KEY" && exit 1)
+          test -n "${APP_DOMAIN}" || (echo "Missing repository variable APP_DOMAIN" && exit 1)
+
+      - name: Install local deploy tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync curl openssh-client
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_key
+          chmod 600 ~/.ssh/vps_key
+          ssh-keyscan -p "${VPS_SSH_PORT}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Prepare VPS
+        run: |
+          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "VPS_APP_DIR='${VPS_APP_DIR}' bash -s" <<'REMOTE'
+            set -euo pipefail
+            if ! command -v curl >/dev/null 2>&1 || ! command -v rsync >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y curl rsync ca-certificates gnupg
+            fi
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo install -m 0755 -d /etc/apt/keyrings
+              . /etc/os-release
+              repo_os="${ID}"
+              if [ "${repo_os}" != "debian" ] && [ "${repo_os}" != "ubuntu" ]; then
+                repo_os="debian"
+              fi
+              curl -fsSL "https://download.docker.com/linux/${repo_os}/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${repo_os} ${VERSION_CODENAME:-bookworm} stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+              sudo apt-get update
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            fi
+            sudo mkdir -p "${VPS_APP_DIR}"
+            sudo chown -R "$USER":"$USER" "${VPS_APP_DIR}"
+          REMOTE
+
+      - name: Sync files
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude '.env.production' \
+            -e "ssh -i ~/.ssh/vps_key -p ${VPS_SSH_PORT}" \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${VPS_APP_DIR}/"
+
+      - name: Write production env
+        run: |
+          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cat > '${VPS_APP_DIR}/.env.production'" <<EOF
+          NODE_ENV=production
+          HOST=0.0.0.0
+          PORT=8787
+          APP_PORT=${APP_PORT}
+          APP_DOMAIN=${APP_DOMAIN}
+          COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+          DATA_DIR=${DATA_DIR}
+          MAX_DOCUMENT_CHARS=60000
+          LOG_LEVEL=info
+          EOF
+
+      - name: Deploy compose stack
+        run: |
+          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cd '${VPS_APP_DIR}' && \
+            docker compose --env-file .env.production down --remove-orphans && \
+            docker compose --env-file .env.production up -d --build --remove-orphans && \
+            docker compose --env-file .env.production ps && \
+            docker image prune -f"
+
+      - name: Healthcheck local
+        run: |
+          ssh -i ~/.ssh/vps_key -p "${VPS_SSH_PORT}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "curl -fsS 'http://127.0.0.1:${APP_PORT}/health'"
+
+      - name: Healthcheck HTTPS
+        run: |
+          curl -fsS "https://${APP_DOMAIN}/health"

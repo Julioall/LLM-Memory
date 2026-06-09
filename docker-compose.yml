@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    container_name: persistent-gpt-memory-app
+    restart: unless-stopped
+    env_file:
+      - path: .env.production
+        required: false
+    environment:
+      PORT: "8787"
+      DATA_DIR: "${DATA_DIR:-/app/data}"
+    volumes:
+      - memory_data:/app/data
+    ports:
+      - "${APP_PORT:-8787}:8787"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2
+    container_name: persistent-gpt-memory-caddy
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_DOMAIN: "${APP_DOMAIN:-localhost}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  memory_data:
+  caddy_data:
+  caddy_config:
