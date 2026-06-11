@@ -80,6 +80,8 @@ Exemplos completos estão em [docs/USAGE.md](docs/USAGE.md).
 
 ## GPT Actions
 
+Guia completo: [docs/CHATGPT_SETUP.md](docs/CHATGPT_SETUP.md).
+
 1. Faça deploy em HTTPS.
 2. Abra `https://SEU_DOMINIO/openapi.yaml`.
 3. No editor do GPT personalizado, vá até Actions e crie uma nova Action.

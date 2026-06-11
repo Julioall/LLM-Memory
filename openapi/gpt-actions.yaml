@@ -4,14 +4,8 @@ info:
   version: 0.1.0
   description: REST API for a private local-file persistent memory used by GPT Actions.
 servers:
-  - url: https://{domain}
+  - url: https://memory.novascript.com.br
     description: Production HTTPS endpoint
-    variables:
-      domain:
-        default: memory.example.com
-        description: Replace with APP_DOMAIN.
-  - url: http://localhost:8787
-    description: Local development endpoint
 security: []
 paths:
   /health:
@@ -20,25 +14,42 @@ paths:
       summary: Check memory server health.
       description: Use this to verify that the memory service, storage path and index are available.
       responses:
-        "200":
+        '200':
           description: Health status.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Health"
+                $ref: '#/components/schemas/Health'
   /api/index:
     get:
       operationId: listMemoryIndex
       summary: List compact memory index.
       description: Use before reading documents. Returns metadata and summaries only.
       parameters:
-        - $ref: "#/components/parameters/Type"
-        - $ref: "#/components/parameters/Category"
-        - $ref: "#/components/parameters/Tag"
-        - $ref: "#/components/parameters/Status"
-        - $ref: "#/components/parameters/Limit"
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/DocumentType'
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DocumentStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
       responses:
-        "200":
+        '200':
           description: Compact document index.
           content:
             application/json:
@@ -48,21 +59,39 @@ paths:
                   documents:
                     type: array
                     items:
-                      $ref: "#/components/schemas/IndexedDocument"
-                required: [documents]
+                      $ref: '#/components/schemas/IndexedDocument'
+                required:
+                  - documents
   /api/docs:
     get:
       operationId: listMemoryDocuments
       summary: List memory documents by metadata.
       description: Lists document summaries. Does not return full Markdown content.
       parameters:
-        - $ref: "#/components/parameters/Type"
-        - $ref: "#/components/parameters/Category"
-        - $ref: "#/components/parameters/Tag"
-        - $ref: "#/components/parameters/Status"
-        - $ref: "#/components/parameters/Limit"
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/DocumentType'
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DocumentStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
       responses:
-        "200":
+        '200':
           description: Matching document summaries.
           content:
             application/json:
@@ -72,8 +101,9 @@ paths:
                   documents:
                     type: array
                     items:
-                      $ref: "#/components/schemas/IndexedDocument"
-                required: [documents]
+                      $ref: '#/components/schemas/IndexedDocument'
+                required:
+                  - documents
     post:
       operationId: createMemoryDocument
       summary: Create a memory document.
@@ -83,101 +113,121 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateDocumentInput"
+              $ref: '#/components/schemas/CreateDocumentInput'
       responses:
-        "201":
+        '201':
           description: Created document.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryDocument"
+                $ref: '#/components/schemas/MemoryDocument'
   /api/docs/{id}:
     get:
       operationId: readMemoryDocument
       summary: Read one memory document.
       description: Read full Markdown content only after selecting the document from the index or search.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
-        "200":
+        '200':
           description: Full document.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryDocument"
+                $ref: '#/components/schemas/MemoryDocument'
     put:
       operationId: updateMemoryDocument
       summary: Update one memory document.
       description: Updates content and selected metadata. Requires expected_version and archives the previous version automatically.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateDocumentInput"
+              $ref: '#/components/schemas/UpdateDocumentInput'
       responses:
-        "200":
+        '200':
           description: Updated document.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryDocument"
+                $ref: '#/components/schemas/MemoryDocument'
     delete:
       operationId: deleteMemoryDocument
       summary: Move one document to trash.
       description: Does not permanently delete. Requires a reason and moves the document to trash.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DeleteDocumentInput"
+              $ref: '#/components/schemas/DeleteDocumentInput'
       responses:
-        "200":
+        '200':
           description: Deleted document summary in trash.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/IndexedDocument"
+                $ref: '#/components/schemas/IndexedDocument'
   /api/docs/{id}/restore:
     post:
       operationId: restoreMemoryDocument
       summary: Restore a trashed document.
       description: Restores a document from trash and updates the index.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RestoreDocumentInput"
+              $ref: '#/components/schemas/RestoreDocumentInput'
       responses:
-        "200":
+        '200':
           description: Restored document.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryDocument"
+                $ref: '#/components/schemas/MemoryDocument'
   /api/docs/{id}/permanent:
     delete:
       operationId: permanentlyDeleteMemoryDocument
       summary: Permanently delete a document.
       description: Destructive endpoint. Use only when explicitly requested. Requires confirm=PERMANENT_DELETE and a reason.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermanentDeleteDocumentInput"
+              $ref: '#/components/schemas/PermanentDeleteDocumentInput'
       responses:
-        "200":
+        '200':
           description: Permanent delete confirmation.
           content:
             application/json:
@@ -189,16 +239,22 @@ paths:
                   deleted:
                     type: boolean
                     const: true
-                required: [id, deleted]
+                required:
+                  - id
+                  - deleted
   /api/docs/{id}/versions:
     get:
       operationId: listDocumentVersions
       summary: List archived versions.
       description: Lists previous versions saved before updates or version restores.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
-        "200":
+        '200':
           description: Version list.
           content:
             application/json:
@@ -208,31 +264,50 @@ paths:
                   versions:
                     type: array
                     items:
-                      $ref: "#/components/schemas/DocumentVersionInfo"
-                required: [versions]
+                      $ref: '#/components/schemas/DocumentVersionInfo'
+                required:
+                  - versions
   /api/docs/{id}/versions/{version}:
     get:
       operationId: readDocumentVersion
       summary: Read an archived version.
       description: Returns the full Markdown and metadata for one archived version.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
-        - $ref: "#/components/parameters/Version"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
       responses:
-        "200":
+        '200':
           description: Archived document version.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryDocument"
+                $ref: '#/components/schemas/MemoryDocument'
   /api/docs/{id}/versions/{version}/restore:
     post:
       operationId: restoreDocumentVersion
       summary: Restore an archived version.
       description: Restores an old version as a new current version while preserving the previous current version.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
-        - $ref: "#/components/parameters/Version"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
       requestBody:
         required: false
         content:
@@ -243,22 +318,31 @@ paths:
                 reason:
                   type: string
       responses:
-        "200":
+        '200':
           description: Restored document.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryDocument"
+                $ref: '#/components/schemas/MemoryDocument'
   /api/docs/{id}/versions/{version}/diff:
     get:
       operationId: compareDocumentVersion
       summary: Compare archived version with current.
       description: Returns a simple line-by-line diff between an archived version and the current document.
       parameters:
-        - $ref: "#/components/parameters/DocumentId"
-        - $ref: "#/components/parameters/Version"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
       responses:
-        "200":
+        '200':
           description: Diff result.
           content:
             application/json:
@@ -273,7 +357,11 @@ paths:
                     type: integer
                   diff:
                     type: string
-                required: [document_id, compared_version, current_version, diff]
+                required:
+                  - document_id
+                  - compared_version
+                  - current_version
+                  - diff
   /api/search:
     post:
       operationId: searchMemory
@@ -284,9 +372,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SearchInput"
+              $ref: '#/components/schemas/SearchInput'
       responses:
-        "200":
+        '200':
           description: Search results.
           content:
             application/json:
@@ -299,13 +387,16 @@ paths:
                     type: array
                     items:
                       allOf:
-                        - $ref: "#/components/schemas/IndexedDocument"
+                        - $ref: '#/components/schemas/IndexedDocument'
                         - type: object
                           properties:
                             score:
                               type: number
-                          required: [score]
-                required: [query, results]
+                          required:
+                            - score
+                required:
+                  - query
+                  - results
   /api/context-pack:
     post:
       operationId: createContextPack
@@ -316,77 +407,53 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ContextPackInput"
+              $ref: '#/components/schemas/ContextPackInput'
       responses:
-        "200":
+        '200':
           description: Context pack.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ContextPack"
+                $ref: '#/components/schemas/ContextPack'
   /openapi.yaml:
     get:
       operationId: getOpenApiYaml
       summary: Download the GPT Actions OpenAPI YAML.
       responses:
-        "200":
+        '200':
           description: OpenAPI YAML.
           content:
             application/yaml:
               schema:
                 type: string
 components:
-  parameters:
-    DocumentId:
-      name: id
-      in: path
-      required: true
-      schema:
-        type: string
-    Version:
-      name: version
-      in: path
-      required: true
-      schema:
-        type: integer
-        minimum: 1
-    Type:
-      name: type
-      in: query
-      schema:
-        $ref: "#/components/schemas/DocumentType"
-    Category:
-      name: category
-      in: query
-      schema:
-        type: string
-    Tag:
-      name: tag
-      in: query
-      schema:
-        type: string
-    Status:
-      name: status
-      in: query
-      schema:
-        $ref: "#/components/schemas/DocumentStatus"
-    Limit:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 200
   schemas:
     DocumentType:
       type: string
-      enum: [context, skill, prompt, process, template, project, decision, reference, workflow, correction_criteria, class_plan]
+      enum:
+        - context
+        - skill
+        - prompt
+        - process
+        - template
+        - project
+        - decision
+        - reference
+        - workflow
+        - correction_criteria
+        - class_plan
     DocumentStatus:
       type: string
-      enum: [active, archived, deleted]
+      enum:
+        - active
+        - archived
+        - deleted
     DocumentPriority:
       type: string
-      enum: [low, medium, high]
+      enum:
+        - low
+        - medium
+        - high
     DocumentMetadata:
       type: object
       properties:
@@ -397,7 +464,7 @@ components:
         title:
           type: string
         type:
-          $ref: "#/components/schemas/DocumentType"
+          $ref: '#/components/schemas/DocumentType'
         category:
           type: string
         tags:
@@ -405,9 +472,9 @@ components:
           items:
             type: string
         status:
-          $ref: "#/components/schemas/DocumentStatus"
+          $ref: '#/components/schemas/DocumentStatus'
         priority:
-          $ref: "#/components/schemas/DocumentPriority"
+          $ref: '#/components/schemas/DocumentPriority'
         created_at:
           type: string
         updated_at:
@@ -417,32 +484,48 @@ components:
           minimum: 1
         summary:
           type: string
-      required: [id, slug, title, type, category, tags, status, priority, created_at, updated_at, version, summary]
+      required:
+        - id
+        - slug
+        - title
+        - type
+        - category
+        - tags
+        - status
+        - priority
+        - created_at
+        - updated_at
+        - version
+        - summary
     IndexedDocument:
       allOf:
-        - $ref: "#/components/schemas/DocumentMetadata"
+        - $ref: '#/components/schemas/DocumentMetadata'
         - type: object
           properties:
             path:
               type: string
-          required: [path]
+          required:
+            - path
     MemoryDocument:
       type: object
       properties:
         metadata:
-          $ref: "#/components/schemas/DocumentMetadata"
+          $ref: '#/components/schemas/DocumentMetadata'
         content:
           type: string
         path:
           type: string
-      required: [metadata, content, path]
+      required:
+        - metadata
+        - content
+        - path
     CreateDocumentInput:
       type: object
       properties:
         title:
           type: string
         type:
-          $ref: "#/components/schemas/DocumentType"
+          $ref: '#/components/schemas/DocumentType'
         category:
           type: string
           default: general
@@ -456,8 +539,15 @@ components:
           type: string
           description: Markdown content.
         priority:
-          $ref: "#/components/schemas/DocumentPriority"
-      required: [title, type, category, tags, summary, content, priority]
+          $ref: '#/components/schemas/DocumentPriority'
+      required:
+        - title
+        - type
+        - category
+        - tags
+        - summary
+        - content
+        - priority
     UpdateDocumentInput:
       type: object
       properties:
@@ -474,13 +564,17 @@ components:
           minimum: 1
         change_summary:
           type: string
-      required: [content, expected_version, change_summary]
+      required:
+        - content
+        - expected_version
+        - change_summary
     DeleteDocumentInput:
       type: object
       properties:
         reason:
           type: string
-      required: [reason]
+      required:
+        - reason
     RestoreDocumentInput:
       type: object
       properties:
@@ -494,7 +588,9 @@ components:
           const: PERMANENT_DELETE
         reason:
           type: string
-      required: [confirm, reason]
+      required:
+        - confirm
+        - reason
     SearchInput:
       type: object
       properties:
@@ -503,7 +599,7 @@ components:
         types:
           type: array
           items:
-            $ref: "#/components/schemas/DocumentType"
+            $ref: '#/components/schemas/DocumentType'
         tags:
           type: array
           items:
@@ -513,7 +609,8 @@ components:
           minimum: 1
           maximum: 50
           default: 10
-      required: [query]
+      required:
+        - query
     ContextPackInput:
       type: object
       properties:
@@ -531,7 +628,9 @@ components:
           minimum: 1000
           maximum: 60000
           default: 12000
-      required: [goal, query]
+      required:
+        - goal
+        - query
     ContextPack:
       type: object
       properties:
@@ -540,10 +639,13 @@ components:
         selected_documents:
           type: array
           items:
-            $ref: "#/components/schemas/IndexedDocument"
+            $ref: '#/components/schemas/IndexedDocument'
         context_markdown:
           type: string
-      required: [goal, selected_documents, context_markdown]
+      required:
+        - goal
+        - selected_documents
+        - context_markdown
     DocumentVersionInfo:
       type: object
       properties:
@@ -557,7 +659,11 @@ components:
           type: string
         summary:
           type: string
-      required: [document_id, version, path, created_at]
+      required:
+        - document_id
+        - version
+        - path
+        - created_at
     Health:
       type: object
       properties:
@@ -576,5 +682,11 @@ components:
           type: string
         max_document_chars:
           type: integer
-      required: [status, storage_path, document_count, active_count, deleted_count, index_updated_at, max_document_chars]
-
+      required:
+        - status
+        - storage_path
+        - document_count
+        - active_count
+        - deleted_count
+        - index_updated_at
+        - max_document_chars
