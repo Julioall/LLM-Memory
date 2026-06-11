@@ -11,7 +11,30 @@ Ou com Docker:
 
 ```bash
 cp .env.example .env.production
-docker compose up -d --build
+docker compose --env-file .env.production up -d --build
+```
+
+Se a porta `8787` já estiver alocada por outro processo ou container:
+
+```bash
+sed -i 's/^APP_PORT=.*/APP_PORT=8788/' .env.production
+docker compose --env-file .env.production up -d --build
+curl http://127.0.0.1:8788/health
+```
+
+Ou passe a porta apenas neste comando:
+
+```bash
+APP_PORT=8788 docker compose up -d --build
+curl http://127.0.0.1:8788/health
+```
+
+Se o Caddy não conseguir publicar `80` ou `443` localmente, use portas altas:
+
+```bash
+sed -i 's/^CADDY_HTTP_PORT=.*/CADDY_HTTP_PORT=8088/' .env.production
+sed -i 's/^CADDY_HTTPS_PORT=.*/CADDY_HTTPS_PORT=8443/' .env.production
+docker compose --env-file .env.production up -d --build
 ```
 
 Healthcheck:
@@ -131,4 +154,3 @@ https://seu-dominio.com/mcp
 ```
 
 O servidor usa Streamable HTTP em modo stateless e expõe tools como `memory_index_list`, `memory_search`, `memory_doc_read`, `memory_doc_create`, `memory_doc_update`, `memory_doc_delete`, `memory_versions_list` e `memory_context_pack`.
-

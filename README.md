@@ -31,8 +31,31 @@ Com Docker:
 
 ```bash
 cp .env.example .env.production
-docker compose up -d --build
+docker compose --env-file .env.production up -d --build
 curl http://127.0.0.1:8787/health
+```
+
+Se `8787` já estiver em uso, troque só a porta publicada no host:
+
+```bash
+sed -i 's/^APP_PORT=.*/APP_PORT=8788/' .env.production
+docker compose --env-file .env.production up -d --build
+curl http://127.0.0.1:8788/health
+```
+
+Ou passe a porta apenas neste comando:
+
+```bash
+APP_PORT=8788 docker compose up -d --build
+curl http://127.0.0.1:8788/health
+```
+
+Se o Caddy não conseguir publicar `80` ou `443` localmente, use portas altas:
+
+```bash
+sed -i 's/^CADDY_HTTP_PORT=.*/CADDY_HTTP_PORT=8088/' .env.production
+sed -i 's/^CADDY_HTTPS_PORT=.*/CADDY_HTTPS_PORT=8443/' .env.production
+docker compose --env-file .env.production up -d --build
 ```
 
 ## Endpoints principais
@@ -107,4 +130,3 @@ Não exponha este serviço publicamente sem proteção adicional. Como não há 
 ## Deploy
 
 Veja [docs/DEPLOY.md](docs/DEPLOY.md).
-

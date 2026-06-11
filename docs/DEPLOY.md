@@ -28,6 +28,8 @@ Variáveis obrigatórias:
 Variáveis opcionais:
 
 - `APP_PORT`: porta local da API na VPS, padrão `8787`.
+- `CADDY_HTTP_PORT`: porta HTTP publicada pelo Caddy, padrão `80`.
+- `CADDY_HTTPS_PORT`: porta HTTPS publicada pelo Caddy, padrão `443`.
 - `VPS_APP_DIR`: pasta na VPS, padrão `/opt/persistent-gpt-memory-mcp`.
 - `VPS_SSH_PORT`: porta SSH, padrão `22`. Use esta variável para porta customizada, não coloque a porta em `VPS_HOST`.
 - `COMPOSE_PROJECT_NAME`: padrão `persistent-gpt-memory-mcp`.
