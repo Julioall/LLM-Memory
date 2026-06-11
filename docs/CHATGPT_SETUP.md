@@ -39,7 +39,13 @@ servers:
 4. Abra a secao **Actions**.
 5. Crie uma nova Action.
 6. Em **Authentication**, escolha **None**.
-7. Importe ou cole o schema OpenAPI:
+7. No campo de politica de privacidade, use:
+
+```txt
+https://SEU_DOMINIO/privacy
+```
+
+8. Importe ou cole o schema OpenAPI:
 
 ```txt
 https://SEU_DOMINIO/openapi.yaml
@@ -47,7 +53,7 @@ https://SEU_DOMINIO/openapi.yaml
 
 Se a interface nao importar por URL, abra essa URL no navegador, copie o YAML completo e cole no editor de schema da Action.
 
-8. Salve a Action e teste pelo menos estas operacoes:
+9. Salve a Action e teste pelo menos estas operacoes:
 
 - `getMemoryHealth`
 - `listMemoryIndex`
@@ -56,7 +62,7 @@ Se a interface nao importar por URL, abra essa URL no navegador, copie o YAML co
 - `readMemoryDocument`
 - `createContextPack`
 
-9. Publique o GPT como privado ou restrito ao workspace.
+10. Publique o GPT como privado ou restrito ao workspace.
 
 ## Prompts de teste
 

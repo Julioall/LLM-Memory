@@ -166,5 +166,11 @@ describe("Persistent GPT Memory API", () => {
     expect(parsed.paths["/api/docs"].post.operationId).toBe("createMemoryDocument");
     expect(parsed.paths["/api/context-pack"].post.operationId).toBe("createContextPack");
   });
-});
 
+  it("serves the privacy policy markdown", async () => {
+    const response = await app.inject({ method: "GET", url: "/privacy" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/markdown");
+    expect(response.body).toContain("# Politica de Privacidade");
+  });
+});

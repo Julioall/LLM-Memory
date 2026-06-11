@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import cors from "@fastify/cors";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import fastify, { type FastifyInstance } from "fastify";
+import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { registerDocsRoutes } from "./api/routes.docs.js";
 import { registerIndexRoutes } from "./api/routes.index.js";
 import { registerSearchRoutes } from "./api/routes.search.js";
@@ -103,6 +103,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const yaml = await fs.readFile(openApiPath, "utf8");
     return reply.type("application/yaml; charset=utf-8").send(yaml);
   });
+
+  const sendPrivacyPolicy = async (_request: FastifyRequest, reply: FastifyReply) => {
+    const privacyPath = path.resolve(process.cwd(), "docs/PRIVACY_POLICY.md");
+    const markdown = await fs.readFile(privacyPath, "utf8");
+    return reply.type("text/markdown; charset=utf-8").send(markdown);
+  };
+
+  app.get("/privacy", sendPrivacyPolicy);
+  app.get("/privacy.md", sendPrivacyPolicy);
 
   app.post("/mcp", async (request, reply) => {
     const server = createMemoryMcpServer(services);

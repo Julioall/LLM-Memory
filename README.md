@@ -61,6 +61,7 @@ docker compose --env-file .env.production up -d --build
 ## Endpoints principais
 
 - `GET /health`
+- `GET /privacy`
 - `GET /api/index`
 - `GET /api/docs`
 - `POST /api/docs`
@@ -87,8 +88,9 @@ Guia completo: [docs/CHATGPT_SETUP.md](docs/CHATGPT_SETUP.md).
 3. No editor do GPT personalizado, vá até Actions e crie uma nova Action.
 4. Importe o schema OpenAPI.
 5. Configure Authentication como `None`.
-6. Teste `getMemoryHealth`, `listMemoryIndex`, `searchMemory` e `createMemoryDocument`.
-7. Cole as instruções de [docs/GPT_INSTRUCTIONS.md](docs/GPT_INSTRUCTIONS.md) nas instruções do GPT.
+6. Use `https://SEU_DOMINIO/privacy` como URL da política de privacidade.
+7. Teste `getMemoryHealth`, `listMemoryIndex`, `searchMemory` e `createMemoryDocument`.
+8. Cole as instruções de [docs/GPT_INSTRUCTIONS.md](docs/GPT_INSTRUCTIONS.md) nas instruções do GPT.
 
 Referências oficiais úteis:
 
@@ -128,6 +130,8 @@ Cada documento fica em Markdown com frontmatter YAML. O índice guarda apenas me
 ## Segurança
 
 Não exponha este serviço publicamente sem proteção adicional. Como não há autenticação na v1, prefira firewall, VPN, túnel privado, domínio não divulgado ou proxy com controle de acesso. Exclusões normais vão para lixeira; exclusão definitiva exige endpoint separado com `confirm: "PERMANENT_DELETE"`.
+
+Modelo de política de privacidade: [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md). Em produção, ela é servida em `/privacy`.
 
 ## Deploy
 
